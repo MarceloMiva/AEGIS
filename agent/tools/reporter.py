@@ -1,0 +1,135 @@
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from datetime import datetime
+import os
+
+SEVERITY_COLORS = {
+    "CRITICAL": colors.HexColor("#ED1C24"),
+    "HIGH": colors.HexColor("#FF6B35"),
+    "MEDIUM": colors.HexColor("#F59E0B"),
+    "LOW": colors.HexColor("#22C55E"),
+    "UNKNOWN": colors.grey
+}
+
+def run_reporter(target: str, recon_data: dict, classified: dict) -> str:
+    os.makedirs("reports", exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"reports/AEGIS_{target}_{timestamp}.pdf"
+
+    doc = SimpleDocTemplate(filename, pagesize=A4,
+        rightMargin=0.75*inch, leftMargin=0.75*inch,
+        topMargin=0.75*inch, bottomMargin=0.75*inch)
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    # Title
+    title_style = ParagraphStyle("title",
+        fontSize=24, fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#ED1C24"), spaceAfter=6)
+    story.append(Paragraph("AEGIS Security Report", title_style))
+
+    sub_style = ParagraphStyle("sub",
+        fontSize=11, fontName="Helvetica",
+        textColor=colors.grey, spaceAfter=20)
+    story.append(Paragraph(
+        f"Target: {target} | Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        sub_style))
+
+    # Risk badge
+    risk = classified.get("overall_risk", "UNKNOWN")
+    risk_color = SEVERITY_COLORS.get(risk, colors.grey)
+    risk_style = ParagraphStyle("risk",
+        fontSize=16, fontName="Helvetica-Bold",
+        textColor=risk_color, spaceAfter=10)
+    story.append(Paragraph(f"Overall Risk: {risk}", risk_style))
+    story.append(Spacer(1, 0.1*inch))
+
+    # Executive summary
+    header_style = ParagraphStyle("header",
+        fontSize=13, fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#111"), spaceAfter=6)
+    body_style = ParagraphStyle("body",
+        fontSize=10, fontName="Helvetica",
+        textColor=colors.HexColor("#333"), spaceAfter=12)
+
+    story.append(Paragraph("Executive Summary", header_style))
+    story.append(Paragraph(
+        classified.get("summary", "No summary available."), body_style))
+    story.append(Spacer(1, 0.1*inch))
+
+    # Recon summary
+    story.append(Paragraph("Reconnaissance", header_style))
+    recon_rows = [["Field", "Value"]]
+    recon_rows.append(["Target", recon_data.get("target", target)])
+    recon_rows.append(["IP Address", recon_data.get("ip", "N/A")])
+    recon_rows.append(["Subdomains Found",
+        str(len(recon_data.get("subdomains", [])))])
+    recon_rows.append(["DNS Records",
+        str(len(recon_data.get("dns_records", [])))])
+
+    t = Table(recon_rows, colWidths=[2*inch, 4*inch])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#ED1C24")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1),
+            [colors.HexColor("#F9F9F9"), colors.white]),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#DDD")),
+        ("PADDING", (0,0), (-1,-1), 6),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 0.2*inch))
+
+    # Findings
+    story.append(Paragraph("Findings & Recommendations", header_style))
+    findings = classified.get("findings", [])
+    if findings:
+        f_rows = [["ID", "Severity", "Recommendation"]]
+        for f in findings:
+            f_rows.append([
+                str(f.get("id", "N/A")),
+                str(f.get("severity", "N/A")),
+                str(f.get("recommendation", "N/A"))[:80]
+            ])
+        ft = Table(f_rows, colWidths=[1.5*inch, 1.2*inch, 3.3*inch])
+        ft.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#111")),
+            ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE", (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1),
+                [colors.HexColor("#FFF5F5"), colors.white]),
+            ("GRID", (0,0), (-1,-1), 0.5, colors.HexColor("#DDD")),
+            ("PADDING", (0,0), (-1,-1), 6),
+        ]))
+        story.append(ft)
+    else:
+        story.append(Paragraph("No findings recorded.", body_style))
+
+    story.append(Spacer(1, 0.2*inch))
+
+    # MITRE
+    story.append(Paragraph("MITRE ATT&CK Techniques", header_style))
+    techniques = classified.get("mitre_techniques", [])
+    if techniques:
+        story.append(Paragraph(", ".join(techniques), body_style))
+    else:
+        story.append(Paragraph("None identified.", body_style))
+
+    # Footer
+    story.append(Spacer(1, 0.3*inch))
+    footer_style = ParagraphStyle("footer",
+        fontSize=8, fontName="Helvetica",
+        textColor=colors.grey)
+    story.append(Paragraph(
+        "Generated by AEGIS — Autonomous AI Security Triage | MarceloMiva",
+        footer_style))
+
+    doc.build(story)
+    print(f"[REPORTER] Report saved: {filename}")
+    return filename
