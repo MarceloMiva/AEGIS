@@ -1,6 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from pydantic import validator
 from agent.orchestrator import build_agent
 import uuid, json, os
 
