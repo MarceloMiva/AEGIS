@@ -1,9 +1,9 @@
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from pydantic import validator
+from typing import Optional, Dict, List
 from agent.orchestrator import build_agent
-import uuid, json, os
+import uuid
 
 app = FastAPI(title="AEGIS API", version="1.0")
 
@@ -12,10 +12,15 @@ app.add_middleware(CORSMiddleware,
     allow_methods=["*"],
     allow_headers=["*"])
 
-jobs = {}
+jobs: Dict = {}
 
 class ScanRequest(BaseModel):
     target: str
+
+class JobStatus(BaseModel):
+    status: str
+    target: Optional[str] = None
+    error: Optional[str] = None
 
 def run_scan(job_id: str, target: str):
     jobs[job_id]["status"] = "running"
@@ -30,7 +35,11 @@ def run_scan(job_id: str, target: str):
             "logs": []
         })
         jobs[job_id]["status"] = "done"
-        jobs[job_id]["result"] = result
+        jobs[job_id]["result"] = {
+            "logs": result.get("logs", []),
+            "report_path": result.get("report_path", ""),
+            "risk": result.get("classified_data", {}).get("overall_risk", "UNKNOWN")
+        }
     except Exception as e:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = str(e)
