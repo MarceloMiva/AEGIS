@@ -1,11 +1,9 @@
-fastapi==0.100.0
+fastapi==0.111.0
 uvicorn==0.29.0
-pydantic==1.10.13
-anyio==3.7.1
-starlette==0.27.0
-langchain==0.1.20
-langchain-community==0.0.38
-langgraph==0.0.40
+pydantic==2.7.0
+langgraph==0.1.5
+langchain==0.2.5
+langchain-community==0.2.5
 ollama
 dnspython==2.6.1
 requests==2.32.3
